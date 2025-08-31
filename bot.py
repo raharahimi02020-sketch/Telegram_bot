@@ -4,7 +4,7 @@ from tinydb import TinyDB, Query
 import random
 
 # ---------- توکن ----------
-TOKEN = "توکن_ربات_تو_اینجا"
+TOKEN = "8468902593:AAGqaP2sLbUaV-m2UpAoHzpuGAAi5M9FgIQ"
 bot = telebot.TeleBot(TOKEN)
 
 # ---------- پایگاه داده ----------
@@ -13,7 +13,7 @@ users_table = db.table('users')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
-ADMIN_ID = 123456789
+ADMIN_ID = 123456789  # شناسه تلگرام ادمین خودت
 
 # ---------- متدهای کمک ----------
 def get_user(user_id):
