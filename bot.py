@@ -10,7 +10,6 @@ bot = telebot.TeleBot(TOKEN)
 # ---------- پایگاه داده ----------
 db = TinyDB('database.json')
 users_table = db.table('users')
-games_table = db.table('games')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
@@ -24,9 +23,7 @@ def update_user(user):
     users_table.update(user, Query().id == user['id'])
 
 def create_profile(message):
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    markup.add("شروع ثبت پروفایل")
-    bot.send_message(message.chat.id, "برای بازی ابتدا پروفایل خود را تکمیل کنید.", reply_markup=markup)
+    bot.send_message(message.chat.id, "برای شروع بازی لطفا پروفایل خود را تکمیل کنید.")
 
 # ---------- دستور start ----------
 @bot.message_handler(commands=['start'])
@@ -46,65 +43,65 @@ def start(message):
             'banned': False
         })
         create_profile(message)
-    else:
-        if user['banned']:
-            bot.send_message(message.chat.id, "❌ شما بن شده‌اید.")
-        else:
-            bot.send_message(message.chat.id, "سلام دوباره! برای شروع بازی /menu را بزنید.")
 
-# ---------- منوی اصلی ----------
-@bot.message_handler(commands=['menu'])
-def menu(message):
+    # ---------- منوی شیشه‌ای ----------
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.row("🎲 بازی منچ", "👤 پروفایل")
+    markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
+    markup.row("📊 آمار من", "🔧 تنظیمات")
+    
+    bot.send_message(message.chat.id,
+                     "🎉 خوش آمدید به بات منچ آنلاین!\nاز منوی زیر می‌توانید کارها را شروع کنید:",
+                     reply_markup=markup)
+
+# ---------- دریافت پیام کاربران ----------
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
     user = get_user(message.from_user.id)
-    if not user or user['nickname']=="":
-        create_profile(message)
+    if not user:
+        bot.send_message(message.chat.id, "لطفا ابتدا /start را بزنید.")
         return
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🎲 بازی منچ", callback_data="play"))
-    markup.add(types.InlineKeyboardButton("👤 پروفایل", callback_data="profile"))
-    markup.add(types.InlineKeyboardButton("💬 پشتیبانی", callback_data="support"))
-    markup.add(types.InlineKeyboardButton("📨 دعوت دوستان", callback_data="invite"))
-    bot.send_message(message.chat.id, "منوی اصلی:", reply_markup=markup)
-
-# ---------- callback منو ----------
-@bot.callback_query_handler(func=lambda call: True)
-def callback(call):
-    user = get_user(call.from_user.id)
     if user['banned']:
-        bot.answer_callback_query(call.id, "❌ شما بن شده‌اید.")
+        bot.send_message(message.chat.id, "❌ شما بن شده‌اید و نمی‌توانید بازی کنید.")
         return
 
-    if call.data == "play":
+    text = message.text
+    if text == "🎲 بازی منچ":
         if user['coins'] < 5:
-            bot.send_message(call.message.chat.id, "⚠️ شما ۵ سکه نیاز دارید.")
-        else:
-            user['coins'] -= 5
-            users_table.update({'coins': user['coins']}, Query().id == user['id'])
-            # شروع بازی ساده: نوبت اول تاس
-            dice = random.randint(1,6)
-            bot.send_message(call.message.chat.id, f"🎲 شما تاس ریختید: {dice}\n(نسخه اولیه: حرکت مهره ثبت شد)")
+            bot.send_message(message.chat.id, "⚠️ شما ۵ سکه نیاز دارید.")
+            return
+        user['coins'] -= 5
+        user['games_played'] += 1
+        update_user(user)
+        dice = random.randint(1,6)
+        bot.send_message(message.chat.id, f"🎲 شما تاس ریختید: {dice}\n(نسخه اولیه: حرکت مهره ثبت شد)")
 
-    elif call.data == "profile":
-        text = f"👤 پروفایل شما:\n"
-        text += f"نام مستعار: {user['nickname']}\nسن: {user['age']}\nشهر: {user['city']}\n"
-        text += f"سکه‌ها: {user['coins']}\nمدال‌ها: {', '.join(user['medals']) if user['medals'] else 'ندارد'}\n"
-        text += f"تعداد بازی‌ها: {user['games_played']}\nبردها: {user['wins']}"
-        bot.send_message(call.message.chat.id, text)
+    elif text == "👤 پروفایل":
+        bot.send_message(message.chat.id,
+                         f"👤 پروفایل شما:\nنام مستعار: {user['nickname']}\nسن: {user['age']}\nشهر: {user['city']}\nسکه‌ها: {user['coins']}\nمدال‌ها: {', '.join(user['medals']) if user['medals'] else 'ندارد'}\nتعداد بازی‌ها: {user['games_played']}\nبردها: {user['wins']}")
 
-    elif call.data == "support":
-        bot.send_message(call.message.chat.id, "پیام خود را برای پشتیبانی ارسال کنید.")
+    elif text == "💬 پشتیبانی":
+        bot.send_message(message.chat.id, "پیام خود را برای پشتیبانی ارسال کنید.")
+        support_table.insert({'from': user['id'], 'text': "در انتظار پیام..."})  # آماده دریافت پیام بعدی
 
-    elif call.data == "invite":
-        bot.send_message(call.message.chat.id, f"لینک دعوت شما: https://t.me/YourBotUsername?start={user['id']}\n🎁 با دعوت دوستان ۲۰ سکه دریافت می‌کنید!")
+    elif text == "📨 دعوت دوستان":
+        bot.send_message(message.chat.id, f"لینک دعوت شما: https://t.me/YourBotUsername?start={user['id']}\n🎁 با دعوت دوستان ۲۰ سکه دریافت می‌کنید!")
+
+    elif text == "📊 آمار من":
+        bot.send_message(message.chat.id, f"تعداد بازی‌ها: {user['games_played']}\nبردها: {user['wins']}\nسکه‌ها: {user['coins']}")
+
+    elif text == "🔧 تنظیمات":
+        bot.send_message(message.chat.id, "تنظیمات بات…")
+
+    else:
+        bot.send_message(message.chat.id, "⚠️ گزینه نامعتبر! لطفا از منوی شیشه‌ای انتخاب کنید.")
 
 # ---------- دریافت پیام پشتیبانی ----------
 @bot.message_handler(func=lambda m: True)
-def handle_messages(message):
+def handle_support_messages(message):
     user = get_user(message.from_user.id)
-    if not user:
-        return
-    support_table.insert({'from': message.from_user.id, 'text': message.text})
+    if not user: return
+    support_table.insert({'from': user['id'], 'text': message.text})
     bot.send_message(message.chat.id, "✅ پیام شما به ادمین ارسال شد.")
 
 # ---------- ادمین: دادن سکه ----------
