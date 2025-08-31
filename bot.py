@@ -13,7 +13,7 @@ users_table = db.table('users')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
-ADMIN_ID = 8461153976  # آی‌دی تلگرام ادمین خودت
+ADMIN_ID = 123456789  # آی‌دی تلگرام ادمین خودت
 
 # ---------- متدهای کمک ----------
 def get_user(user_id):
@@ -22,13 +22,23 @@ def get_user(user_id):
 def update_user(user):
     users_table.update(user, Query().id == user['id'])
 
-def start_profile_step(user):
-    user['profile_step'] = 1
-    update_user(user)
-    return "🎯 لطفا نام مستعار خود را وارد کنید:"
-
 def is_admin(user_id):
     return user_id == ADMIN_ID
+
+def send_main_menu(message):
+    user = get_user(message.from_user.id)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    # منوی کاربران
+    markup.row("🎲 بازی منچ", "👤 پروفایل")
+    markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
+    markup.row("📊 آمار من", "🔧 تنظیمات")
+    # منوی ادمین
+    if is_admin(user['id']):
+        markup.row("👥 مدیریت کاربران", "💰 مدیریت سکه")
+        markup.row("🚫 بن کردن کاربر", "✉️ ارسال پیام به کاربران")
+    bot.send_message(message.chat.id,
+                     "📌 منو را انتخاب کنید:",
+                     reply_markup=markup)
 
 # ---------- دستور start ----------
 @bot.message_handler(commands=['start'])
@@ -58,22 +68,6 @@ def start(message):
         return
 
     send_main_menu(message)
-
-# ---------- منوی اصلی ----------
-def send_main_menu(message):
-    user = get_user(message.from_user.id)
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-    # منوی کاربران
-    markup.row("🎲 بازی منچ", "👤 پروفایل")
-    markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
-    markup.row("📊 آمار من", "🔧 تنظیمات")
-    # منوی ادمین
-    if is_admin(user['id']):
-        markup.row("👥 مدیریت کاربران", "💰 مدیریت سکه")
-        markup.row("🚫 بن کردن کاربر", "✉️ ارسال پیام به کاربران")
-    bot.send_message(message.chat.id,
-                     "📌 منو را انتخاب کنید:",
-                     reply_markup=markup)
 
 # ---------- دریافت پیام کاربران ----------
 @bot.message_handler(func=lambda message: True)
@@ -127,7 +121,7 @@ def handle_message(message):
 
     elif text == "💬 پشتیبانی":
         bot.send_message(message.chat.id, "پیام خود را برای پشتیبانی ارسال کنید.")
-        support_table.insert({'from': user['id'], 'text': "در انتظار پیام..."})
+        support_table.insert({'from': user['id'], 'text': message.text})
 
     elif text == "📨 دعوت دوستان":
         bot.send_message(message.chat.id, f"لینک دعوت شما: https://t.me/YourBotUsername?start={user['id']}\n🎁 با دعوت دوستان ۲۰ سکه دریافت می‌کنید!")
@@ -153,14 +147,6 @@ def handle_message(message):
 
     else:
         bot.send_message(message.chat.id, "⚠️ گزینه نامعتبر! لطفا از منوی شیشه‌ای انتخاب کنید.")
-
-# ---------- دریافت پیام پشتیبانی ----------
-@bot.message_handler(func=lambda m: True)
-def handle_support_messages(message):
-    user = get_user(message.from_user.id)
-    if not user: return
-    support_table.insert({'from': user['id'], 'text': message.text})
-    bot.send_message(message.chat.id, "✅ پیام شما به ادمین ارسال شد.")
 
 # ---------- ادمین: دادن سکه ----------
 @bot.message_handler(commands=['addcoins'])
@@ -201,4 +187,44 @@ def addcoinsall(message):
 @bot.message_handler(commands=['ban'])
 def ban_user(message):
     if not is_admin(message.from_user.id):
-        bot.reply_to(message, "❌ دسترسی ندارید
+        bot.reply_to(message, "❌ دسترسی ندارید.")
+        return
+    try:
+        user_id = int(message.text.split()[1])
+        user = get_user(user_id)
+        if not user:
+            bot.reply_to(message, "کاربر پیدا نشد!")
+            return
+        user['banned'] = True
+        update_user(user)
+        bot.reply_to(message, f"✅ کاربر {user['nickname']} بن شد.")
+    except:
+        bot.reply_to(message, "فرمت: /ban <user_id>")
+
+# ---------- ادمین: ارسال پیام ----------
+@bot.message_handler(commands=['send'])
+def send_message_admin(message):
+    if not is_admin(message.from_user.id):
+        bot.reply_to(message, "❌ دسترسی ندارید.")
+        return
+    try:
+        parts = message.text.split()
+        target = parts[1]
+        text = " ".join(parts[2:])
+        if target == "all":
+            for u in users_table.all():
+                bot.send_message(u['id'], f"📢 پیام ادمین:\n{text}")
+            bot.reply_to(message, "✅ پیام به همه کاربران ارسال شد.")
+        else:
+            user_id = int(target)
+            u = get_user(user_id)
+            if not u:
+                bot.reply_to(message, "کاربر پیدا نشد!")
+                return
+            bot.send_message(user_id, f"📢 پیام ادمین:\n{text}")
+            bot.reply_to(message, f"✅ پیام به {u['nickname']} ارسال شد.")
+    except:
+        bot.reply_to(message, "فرمت: /send <user_id/all> <متن>")
+
+# ---------- اجرای بات ----------
+bot.polling()
