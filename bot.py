@@ -13,7 +13,7 @@ users_table = db.table('users')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
-ADMIN_ID = 8461153976  # شناسه تلگرام ادمین
+ADMIN_ID = 8461153976  # آی‌دی تلگرام ادمین خودت
 
 # ---------- متدهای کمک ----------
 def get_user(user_id):
@@ -26,6 +26,9 @@ def start_profile_step(user):
     user['profile_step'] = 1
     update_user(user)
     return "🎯 لطفا نام مستعار خود را وارد کنید:"
+
+def is_admin(user_id):
+    return user_id == ADMIN_ID
 
 # ---------- دستور start ----------
 @bot.message_handler(commands=['start'])
@@ -54,13 +57,22 @@ def start(message):
         bot.send_message(message.chat.id, "🎯 لطفا نام مستعار خود را وارد کنید:")
         return
 
-    # ---------- منوی شیشه‌ای ----------
+    send_main_menu(message)
+
+# ---------- منوی اصلی ----------
+def send_main_menu(message):
+    user = get_user(message.from_user.id)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    # منوی کاربران
     markup.row("🎲 بازی منچ", "👤 پروفایل")
     markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
     markup.row("📊 آمار من", "🔧 تنظیمات")
+    # منوی ادمین
+    if is_admin(user['id']):
+        markup.row("👥 مدیریت کاربران", "💰 مدیریت سکه")
+        markup.row("🚫 بن کردن کاربر", "✉️ ارسال پیام به کاربران")
     bot.send_message(message.chat.id,
-                     "🎉 خوش آمدید به بات منچ آنلاین!\nاز منوی زیر می‌توانید کارها را شروع کنید:",
+                     "📌 منو را انتخاب کنید:",
                      reply_markup=markup)
 
 # ---------- دریافت پیام کاربران ----------
@@ -94,17 +106,10 @@ def handle_message(message):
             user['profile_step'] = 0
             update_user(user)
             bot.send_message(message.chat.id, "✅ پروفایل شما تکمیل شد!")
-            # نمایش منوی شیشه‌ای
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-            markup.row("🎲 بازی منچ", "👤 پروفایل")
-            markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
-            markup.row("📊 آمار من", "🔧 تنظیمات")
-            bot.send_message(message.chat.id,
-                             "اکنون می‌توانید از منوی زیر استفاده کنید:",
-                             reply_markup=markup)
+            send_main_menu(message)
         return
 
-    # ---------- منوی شیشه‌ای ----------
+    # ---------- دستورات کاربر ----------
     text = message.text
     if text == "🎲 بازی منچ":
         if user['coins'] < 5:
@@ -133,6 +138,19 @@ def handle_message(message):
     elif text == "🔧 تنظیمات":
         bot.send_message(message.chat.id, "تنظیمات بات…")
 
+    # ---------- منوی ادمین ----------
+    elif is_admin(user['id']):
+        if text == "👥 مدیریت کاربران":
+            all_users = users_table.all()
+            info = "\n".join([f"{u['id']}: {u['nickname']} ({u['coins']} سکه)" for u in all_users])
+            bot.send_message(message.chat.id, f"لیست کاربران:\n{info}")
+        elif text == "💰 مدیریت سکه":
+            bot.send_message(message.chat.id, "برای دادن سکه به کاربر یا همه، از دستور /addcoins یا /addcoinsall استفاده کنید.")
+        elif text == "🚫 بن کردن کاربر":
+            bot.send_message(message.chat.id, "برای بن کردن کاربر از دستور /ban <user_id> استفاده کنید.")
+        elif text == "✉️ ارسال پیام به کاربران":
+            bot.send_message(message.chat.id, "برای ارسال پیام از دستور /send <user_id/all> <متن> استفاده کنید.")
+
     else:
         bot.send_message(message.chat.id, "⚠️ گزینه نامعتبر! لطفا از منوی شیشه‌ای انتخاب کنید.")
 
@@ -147,7 +165,7 @@ def handle_support_messages(message):
 # ---------- ادمین: دادن سکه ----------
 @bot.message_handler(commands=['addcoins'])
 def addcoins(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         bot.reply_to(message, "❌ دسترسی ندارید.")
         return
     try:
@@ -166,7 +184,7 @@ def addcoins(message):
 
 @bot.message_handler(commands=['addcoinsall'])
 def addcoinsall(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         bot.reply_to(message, "❌ دسترسی ندارید.")
         return
     try:
@@ -179,5 +197,8 @@ def addcoinsall(message):
     except:
         bot.reply_to(message, "فرمت: /addcoinsall <تعداد>")
 
-# ---------- اجرای بات ----------
-bot.polling()
+# ---------- ادمین: بن کردن کاربر ----------
+@bot.message_handler(commands=['ban'])
+def ban_user(message):
+    if not is_admin(message.from_user.id):
+        bot.reply_to(message, "❌ دسترسی ندارید
