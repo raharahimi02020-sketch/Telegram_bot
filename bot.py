@@ -13,7 +13,7 @@ users_table = db.table('users')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
-ADMIN_ID = 8461153976  # شناسه تلگرام ادمین خودت
+ADMIN_ID = 8461153976  # شناسه تلگرام ادمین
 
 # ---------- متدهای کمک ----------
 def get_user(user_id):
@@ -22,8 +22,10 @@ def get_user(user_id):
 def update_user(user):
     users_table.update(user, Query().id == user['id'])
 
-def create_profile(message):
-    bot.send_message(message.chat.id, "برای شروع بازی لطفا پروفایل خود را تکمیل کنید.")
+def start_profile_step(user):
+    user['profile_step'] = 1
+    update_user(user)
+    return "🎯 لطفا نام مستعار خود را وارد کنید:"
 
 # ---------- دستور start ----------
 @bot.message_handler(commands=['start'])
@@ -40,16 +42,23 @@ def start(message):
             'coins': 0,
             'games_played': 0,
             'wins': 0,
-            'banned': False
+            'banned': False,
+            'profile_step': 1
         })
-        create_profile(message)
+        bot.send_message(message.chat.id, "🎉 خوش آمدید! ابتدا پروفایل خود را تکمیل کنید.")
+        return bot.send_message(message.chat.id, "🎯 لطفا نام مستعار خود را وارد کنید:")
+
+    if user['nickname'] == "":
+        user['profile_step'] = 1
+        update_user(user)
+        bot.send_message(message.chat.id, "🎯 لطفا نام مستعار خود را وارد کنید:")
+        return
 
     # ---------- منوی شیشه‌ای ----------
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     markup.row("🎲 بازی منچ", "👤 پروفایل")
     markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
     markup.row("📊 آمار من", "🔧 تنظیمات")
-    
     bot.send_message(message.chat.id,
                      "🎉 خوش آمدید به بات منچ آنلاین!\nاز منوی زیر می‌توانید کارها را شروع کنید:",
                      reply_markup=markup)
@@ -65,6 +74,37 @@ def handle_message(message):
         bot.send_message(message.chat.id, "❌ شما بن شده‌اید و نمی‌توانید بازی کنید.")
         return
 
+    # ---------- تکمیل پروفایل مرحله‌ای ----------
+    if 'profile_step' in user and user['profile_step'] > 0:
+        step = user['profile_step']
+        if step == 1:
+            user['nickname'] = message.text
+            user['profile_step'] = 2
+            update_user(user)
+            bot.send_message(message.chat.id, "🎯 لطفا سن خود را وارد کنید:")
+        elif step == 2:
+            if not message.text.isdigit():
+                return bot.send_message(message.chat.id, "⚠️ لطفا فقط عدد وارد کنید.")
+            user['age'] = int(message.text)
+            user['profile_step'] = 3
+            update_user(user)
+            bot.send_message(message.chat.id, "🎯 لطفا شهر و استان خود را وارد کنید:")
+        elif step == 3:
+            user['city'] = message.text
+            user['profile_step'] = 0
+            update_user(user)
+            bot.send_message(message.chat.id, "✅ پروفایل شما تکمیل شد!")
+            # نمایش منوی شیشه‌ای
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+            markup.row("🎲 بازی منچ", "👤 پروفایل")
+            markup.row("💬 پشتیبانی", "📨 دعوت دوستان")
+            markup.row("📊 آمار من", "🔧 تنظیمات")
+            bot.send_message(message.chat.id,
+                             "اکنون می‌توانید از منوی زیر استفاده کنید:",
+                             reply_markup=markup)
+        return
+
+    # ---------- منوی شیشه‌ای ----------
     text = message.text
     if text == "🎲 بازی منچ":
         if user['coins'] < 5:
@@ -82,7 +122,7 @@ def handle_message(message):
 
     elif text == "💬 پشتیبانی":
         bot.send_message(message.chat.id, "پیام خود را برای پشتیبانی ارسال کنید.")
-        support_table.insert({'from': user['id'], 'text': "در انتظار پیام..."})  # آماده دریافت پیام بعدی
+        support_table.insert({'from': user['id'], 'text': "در انتظار پیام..."})
 
     elif text == "📨 دعوت دوستان":
         bot.send_message(message.chat.id, f"لینک دعوت شما: https://t.me/YourBotUsername?start={user['id']}\n🎁 با دعوت دوستان ۲۰ سکه دریافت می‌کنید!")
