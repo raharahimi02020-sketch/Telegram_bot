@@ -13,7 +13,7 @@ users_table = db.table('users')
 support_table = db.table('support')
 
 # ---------- تنظیمات ----------
-ADMIN_ID = 123456789  # آی‌دی تلگرام ادمین خودت
+ADMIN_ID = 8461153976  # آی‌دی تلگرام ادمین خودت
 
 # ---------- متدهای کمک ----------
 def get_user(user_id):
